@@ -8,6 +8,17 @@ SUFFIX=""
 KEEP_QUIET="n"
 STOP_SYSTEM_SERVICE="y"
 
+run_privileged() {
+  if [ "$(id -u)" = "0" ]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    echo "Need root privileges to run: $*" >&2
+    return 127
+  fi
+}
+
 usage() {
   if [ -n "$1" ]; then
     echo "${red}${1}${default}"
@@ -137,7 +148,7 @@ fi
 ensure_venv
 
 if [ $STOP_SYSTEM_SERVICE == "y" ]; then
-  sudo systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
+  run_privileged systemctl stop "${OBICO_SERVICE_NAME}" 2>/dev/null || true
 fi
 
 link_to_server
@@ -145,7 +156,7 @@ link_exit_code=$?
 debug link_to_server exited with $link_exit_code
 
 if [ $STOP_SYSTEM_SERVICE == "y" ]; then
-  sudo systemctl restart "${OBICO_SERVICE_NAME}"
+  run_privileged systemctl restart "${OBICO_SERVICE_NAME}"
 fi
 
 if [ ! $KEEP_QUIET = "y" ]; then

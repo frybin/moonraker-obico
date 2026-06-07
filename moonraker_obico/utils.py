@@ -339,6 +339,8 @@ def board_id():
                 return "rpi"
             elif "makerbase" in data.lower() or "roc-rk3328-cc" in data:
                 return "mks"
+            elif "k2 plus" in data.lower():
+                return "k2custom"
     return "NA"
 
 

@@ -124,10 +124,16 @@ ensure_venv() {
   if [ ! -f "${OBICO_ENV}/bin/activate" ] ; then
     report_status "Creating python virtual environment for moonraker-obico..."
     mkdir -p "${OBICO_ENV}"
+    python_bin="/usr/bin/python3"
     if is_k1; then
-      virtualenv -p /opt/bin/python3 --system-site-packages "${OBICO_ENV}"
+      python_bin="/opt/bin/python3"
+    fi
+    if command -v virtualenv >/dev/null 2>&1; then
+      virtualenv -p "${python_bin}" --system-site-packages "${OBICO_ENV}"
+    elif "${python_bin}" -m venv --help >/dev/null 2>&1; then
+      "${python_bin}" -m venv --system-site-packages "${OBICO_ENV}"
     else
-      virtualenv -p /usr/bin/python3 --system-site-packages "${OBICO_ENV}"
+      exit_on_error "Neither virtualenv nor ${python_bin} -m venv is available."
     fi
   fi
 }
