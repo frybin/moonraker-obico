@@ -34,6 +34,12 @@ is_k1() {
   fi
 }
 
+is_k2_buildroot() {
+  [ -f /mnt/UDISK/printer_data/config/moonraker.conf ] && \
+    [ -d /mnt/UDISK/printer_data/logs ] && \
+    ! command -v apt-get >/dev/null 2>&1
+}
+
 create_config() {
   if [ -z "${OBICO_SERVER}" ]; then
     print_header " Obico Server URL "
@@ -97,6 +103,12 @@ path = ${OBICO_LOG_FILE}
 EOF
 }
 
+OBICO_INSTALL_FILE="install.sh"
+
+if is_k2_buildroot; then
+  OBICO_INSTALL_FILE="install_k2_buildroot.sh"
+fi
+
 recreate_update_file() {
   cat <<EOF > "${OBICO_UPDATE_FILE}"
 [update_manager ${OBICO_SERVICE_NAME}]
@@ -105,7 +117,7 @@ path: ${OBICO_DIR}
 origin: ${OBICO_REPO}
 env: ${OBICO_ENV}/bin/python
 requirements: requirements.txt
-install_script: install.sh
+install_script: ${OBICO_INSTALL_FILE}
 managed_services:
   ${OBICO_SERVICE_NAME}
 EOF
@@ -154,7 +166,7 @@ Please fix the error above and re-run this setup script:
 
 -------------------------------------------------------------------------------------------------
 cd ~/moonraker-obico
-./install.sh
+./${OBICO_INSTALL_FILE}
 -------------------------------------------------------------------------------------------------
 
 EOF
