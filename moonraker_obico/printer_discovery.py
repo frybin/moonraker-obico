@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 import platform
@@ -21,6 +22,7 @@ from .version import VERSION
 from .utils import raise_for_status, run_in_thread, verify_link_code
 from .config import Config
 from .moonraker_conn import MoonrakerConn
+from .redaction import REDACTED, redact_sensitive_data, redact_text, redact_url
 
 try:
     from secrets import token_hex
@@ -39,6 +41,18 @@ POLL_PERIOD = 2
 MAX_BACKOFF_SECS = 30
 
 HANDSHAKE_PORT = 46793
+
+
+def create_handshake_app():
+    # https://sentry.obico.io/organizations/sentry/issues/1115
+    # Explicit paths avoid Flask 2.2 calling pkgutil.get_loader (removed in Python 3.14).
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    return flask.Flask(
+        'handshake',
+        root_path=module_dir,
+        instance_path=module_dir,
+    )
+
 
 class StubMoonrakerConn:
     """
@@ -151,7 +165,7 @@ class PrinterDiscovery(object):
 
             except (IOError, OSError) as ex:
                 # Should continue on error in case of temporary network problems
-                _logger.warning(ex)
+                _logger.warning(redact_text(ex))
 
             steps_remaining -= 1
             if steps_remaining < 0:
@@ -176,9 +190,9 @@ class PrinterDiscovery(object):
         data['one_time_passcode'] = self.get_one_time_passcode()
 
         endpoint = self.config.server.canonical_endpoint_prefix() + '/api/v1/octo/unlinked/'
-        _logger.debug(f'calling {endpoint}')
+        _logger.debug('calling {}'.format(redact_url(endpoint)))
         resp = requests.request('POST', endpoint, timeout=5, data=json.dumps(data), headers={'Content-Type': 'application/json'})
-        _logger.debug(f'got response {resp.status_code} {resp.text}')
+        _logger.debug('got response {} {}'.format(resp.status_code, redact_text(resp.text)))
         return resp
 
     def _collect_device_info(self):
@@ -188,7 +202,7 @@ class PrinterDiscovery(object):
         return info
 
     def listen_to_handshake(self):
-        handshake_app = flask.Flask('handshake')
+        handshake_app = create_handshake_app()
 
         @handshake_app.route('/plugin/obico/grab-discovery-secret')
         def grab_discovery_secret():
@@ -289,7 +303,7 @@ class PrinterDiscovery(object):
         msg = data['messages'][0]
 
         # Stops after first verify attempt
-        _logger.info('printer_discovery got incoming msg: {}'.format(msg))
+        _logger.info('printer_discovery got incoming msg: {}'.format(redact_sensitive_data(msg)))
 
         if msg['type'] == 'verify_code':
             self.config.load_from_config_file() # Refresh the config in case the token is obtained manually, or by the 6-digit method
@@ -306,7 +320,7 @@ class PrinterDiscovery(object):
                 _logger.warning('printer_discovery got unmatching secret')
                 self.sentry.captureMessage(
                     'printer_discovery got unmatching secret',
-                    extra={'secret': self.device_secret, 'msg': msg}
+                    extra={'secret': REDACTED, 'msg': redact_sensitive_data(msg)}
                 )
                 self.stop()
                 return
@@ -315,7 +329,7 @@ class PrinterDiscovery(object):
                 _logger.warning('printer_discovery got unmatching device_id')
                 self.sentry.captureMessage(
                     'printer_discovery got unmatching device_id',
-                    extra={'device_id': self.device_id, 'msg': msg}
+                    extra={'device_id': self.device_id, 'msg': redact_sensitive_data(msg)}
                 )
                 self.stop()
                 return
@@ -376,6 +390,6 @@ def is_local_address(address):
     except Exception as exc:
         _logger.warning(
             'could not determine whether {} is local address ({})'.format(
-                address, exc)
+                redact_text(address), redact_text(exc))
         )
         return False
